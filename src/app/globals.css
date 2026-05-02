@@ -3,9 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --font-display: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
-  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-display: var(--font-instrument-serif), Georgia, "Times New Roman", "Songti SC", "SimSun",
+    serif;
+  --font-handwritten: var(--font-caveat), "Caveat", "Bradley Hand", "Segoe Script", cursive;
+  --font-body: var(--font-inter), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
 }
 
 * {
@@ -19,9 +21,9 @@ html {
 body {
   margin: 0;
   background: #fbfaf7;
-  color: #252326;
+  color: #1a1816;
   font-family: var(--font-body);
-  font-feature-settings: "kern";
+  font-feature-settings: "kern", "ss01";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -36,58 +38,51 @@ button {
 }
 
 button:focus-visible,
-input:focus-visible {
-  outline: 3px solid rgba(111, 99, 218, 0.35);
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(122, 46, 46, 0.45);
   outline-offset: 3px;
 }
 
 ::selection {
-  background: #252326;
-  color: #ffffff;
+  background: #1a1816;
+  color: #fbfaf7;
 }
 
 img {
   display: block;
 }
 
-@keyframes image-breathe {
-  0%,
-  100% {
-    filter: blur(18px);
-    opacity: 0.68;
-    transform: scale(1.035);
-  }
-
-  50% {
-    filter: blur(24px);
-    opacity: 0.82;
-    transform: scale(1.055);
-  }
-}
-
-@keyframes panel-breathe {
-  0%,
-  100% {
-    opacity: 0.84;
-    transform: translateY(0) scale(1);
-  }
-
-  50% {
-    opacity: 1;
-    transform: translateY(-2px) scale(1.018);
-  }
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #847d75;
 }
 
 @keyframes result-reveal {
   from {
-    filter: blur(18px);
     opacity: 0;
-    transform: scale(1.025);
+    transform: translateY(8px);
   }
-
   to {
-    filter: blur(0);
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
+  }
+}
+
+@keyframes dots {
+  0%,
+  20% {
+    content: "·";
+  }
+  40% {
+    content: "· ·";
+  }
+  60%,
+  100% {
+    content: "· · ·";
   }
 }

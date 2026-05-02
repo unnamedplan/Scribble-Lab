@@ -1,15 +1,6 @@
 "use client";
 
 import {
-  Download,
-  Github,
-  ImagePlus,
-  Music2,
-  Twitter,
-  Upload,
-  X as CloseIcon,
-} from "lucide-react";
-import {
   ChangeEvent,
   DragEvent,
   useRef,
@@ -18,8 +9,13 @@ import {
 import Link from "next/link";
 import { DEFAULT_AFTER_IMAGE, SAMPLE_IMAGES } from "@/lib/gallery";
 
-const MAX_SOURCE_FILE_SIZE = 12 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
+const MAX_SOURCE_FILE_SIZE = 8 * 1024 * 1024;
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const INK = "#1a1816";
+const MUTE = "#847d75";
+const RULE = "rgba(0,0,0,0.1)";
+const ACCENT = "#7a2e2e";
 
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -30,30 +26,52 @@ function fileToDataUrl(file: File) {
   });
 }
 
+function HandUploadMark({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 80 80"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M14 56 C 12 64, 20 70, 28 68 L 54 67 C 64 68, 70 60, 67 52" />
+      <path d="M40 14 L 40 50" />
+      <path d="M28 26 L 40 14 L 53 27" />
+    </svg>
+  );
+}
+
 export function ScribbleStudio() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pendingPreview, setPendingPreview] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [resultDataUrl, setResultDataUrl] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
 
   async function handleFile(file: File) {
     setError("");
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      setError("只支持 JPG、PNG、WebP、非动图 GIF 图片。");
+      setError("只支持 JPG、PNG、WebP 图片。");
       return;
     }
 
     if (file.size > MAX_SOURCE_FILE_SIZE) {
-      setError("图片太大了，请上传 12MB 以内的图片。");
+      setError("图片太大了，请上传 8MB 以内的图片。");
       return;
     }
 
     try {
       const preview = await fileToDataUrl(file);
       setPendingPreview(preview);
-      setResultDataUrl(preview);
+      setPendingFile(file);
+      setResultDataUrl("");
     } catch {
       setError("读取图片失败，请换一张图片试试。");
     }
@@ -67,6 +85,7 @@ export function ScribbleStudio() {
 
   function handleDragOver(event: DragEvent<HTMLElement>) {
     event.preventDefault();
+    if (isGenerating) return;
     setIsDragging(true);
   }
 
@@ -77,9 +96,43 @@ export function ScribbleStudio() {
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     setIsDragging(false);
+    if (isGenerating) return;
 
     const file = event.dataTransfer.files?.[0];
     if (file) void handleFile(file);
+  }
+
+  async function handleGenerate() {
+    if (!pendingFile || isGenerating) return;
+
+    setError("");
+    setIsGenerating(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", pendingFile);
+
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { imageBase64?: string; mimeType?: string; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.imageBase64) {
+        setError(payload?.error ?? "生成失败，请稍后再试。");
+        return;
+      }
+
+      const mimeType = payload.mimeType ?? "image/png";
+      setResultDataUrl(`data:${mimeType};base64,${payload.imageBase64}`);
+    } catch {
+      setError("网络异常，请检查连接后重试。");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   async function downloadResult() {
@@ -98,197 +151,265 @@ export function ScribbleStudio() {
   }
 
   function resetCanvas() {
+    if (isGenerating) return;
     setPendingPreview("");
+    setPendingFile(null);
     setResultDataUrl("");
     setError("");
   }
 
+  const hasPending = Boolean(pendingFile);
+
   return (
-    <main className="min-h-screen bg-[#fbfaf7] text-[#252326]">
+    <main className="min-h-screen bg-[#fbfaf7] font-body text-[#1a1816]">
       <input
         ref={inputRef}
         className="sr-only"
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp"
         onChange={handleInputChange}
       />
 
-      <section className="mx-auto flex min-h-screen w-full max-w-[1880px] flex-col px-5 py-4 sm:px-8 lg:px-11">
-        <header className="flex items-center">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1100px] flex-col px-6 sm:px-10 lg:px-14">
+        <header
+          className="flex items-center justify-between border-b pt-6 pb-4"
+          style={{ borderColor: RULE }}
+        >
           <Link
-            className="group inline-flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-[#252326] transition hover:bg-[#f1eee8]"
+            className="inline-flex items-center gap-2.5"
             href="/"
             aria-label="未命名计划"
           >
-            <span className="overflow-hidden rounded-[7px] bg-[#e7e1d7] p-0.5 ring-1 ring-black/[0.07]">
+            <span className="overflow-hidden bg-[#e7e1d7]">
               <img
-                className="h-7 w-7 rounded-[5px] object-cover"
+                className="h-7 w-7 object-cover"
                 src="/samples/generated/logo.jpg"
                 alt=""
                 draggable={false}
               />
             </span>
-            <span className="font-body text-sm font-semibold tracking-normal text-[#353238]">
-              未命名计划
-            </span>
+            <span className="font-display text-lg italic">未命名计划</span>
           </Link>
+          <span
+            className="font-display text-xl italic sm:text-2xl"
+            style={{ color: INK }}
+          >
+            乱画实验室
+          </span>
         </header>
 
-        <section className="flex flex-1 flex-col items-center pt-6 sm:pt-9">
-          <div className="text-center">
-            <h1 className="font-body text-[clamp(3.15rem,5.45vw,5.27rem)] font-bold leading-none tracking-normal text-[#28262a]">
-              乱画实验室
-            </h1>
-            <p className="mt-5 font-body text-lg font-normal text-[#68636c] sm:text-xl">
-              从真实，到随性。
-            </p>
-          </div>
-
-          <div className="mt-12 grid w-full max-w-[1020px] gap-10 lg:grid-cols-2 lg:items-center">
-            <div className="relative isolate aspect-[4/3] min-h-[280px] overflow-hidden rounded-[18px] bg-white shadow-[0_18px_56px_rgba(37,35,38,0.08)] ring-1 ring-black/[0.04]">
+        <section className="mt-12 grid gap-x-10 gap-y-8 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <div
+              className="relative aspect-[4/3] overflow-hidden border bg-white"
+              style={{ borderColor: RULE }}
+            >
               {resultDataUrl ? (
-                <>
-                  <img
-                    className="h-full w-full select-none object-cover [animation:result-reveal_900ms_cubic-bezier(0.22,1,0.36,1)_both]"
-                    src={resultDataUrl}
-                    alt="Generated artwork"
-                    draggable={false}
-                  />
-                  <div className="absolute right-3 top-3 flex gap-2">
-                    <button
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/90 text-[#464146] shadow-[0_8px_20px_rgba(37,35,38,0.1)] ring-1 ring-black/[0.05] backdrop-blur-md transition hover:bg-white"
-                      type="button"
-                      title="下载图片"
-                      onClick={() => void downloadResult()}
-                    >
-                      <Download size={15} strokeWidth={2} />
-                    </button>
-                    <button
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/90 text-[#464146] shadow-[0_8px_20px_rgba(37,35,38,0.1)] ring-1 ring-black/[0.05] backdrop-blur-md transition hover:bg-white"
-                      type="button"
-                      title="重置"
-                      onClick={resetCanvas}
-                    >
-                      <CloseIcon size={15} strokeWidth={2} />
-                    </button>
-                  </div>
-                </>
+                <img
+                  className="h-full w-full select-none object-cover [animation:result-reveal_500ms_ease-out_both]"
+                  src={resultDataUrl}
+                  alt="Generated artwork"
+                  draggable={false}
+                />
               ) : (
-                <div className="relative grid h-full w-full place-items-center bg-[#fbfaf7]">
-                  <img
-                    className="absolute inset-0 h-full w-full select-none object-cover opacity-100"
-                    src={pendingPreview || DEFAULT_AFTER_IMAGE}
-                    alt="Preview"
-                    draggable={false}
-                  />
-                </div>
+                <img
+                  className="h-full w-full select-none object-cover"
+                  src={pendingPreview || DEFAULT_AFTER_IMAGE}
+                  alt="Preview"
+                  draggable={false}
+                />
               )}
+
+              {isGenerating ? (
+                <div className="absolute inset-0 grid place-items-center bg-[#fbfaf7]/85">
+                  <div className="flex flex-col items-center gap-2">
+                    <p
+                      className="font-handwritten text-3xl"
+                      style={{ color: INK }}
+                    >
+                      生成中
+                    </p>
+                    <p className="eyebrow">最多 1-2 分钟</p>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
+            {resultDataUrl ? (
+              <div className="mt-4 flex items-center gap-5">
+                <button
+                  className="font-body text-sm font-medium underline decoration-1 underline-offset-[5px] transition hover:no-underline"
+                  type="button"
+                  onClick={() => void downloadResult()}
+                  style={{ color: INK }}
+                >
+                  ↓ 下载图片
+                </button>
+                <button
+                  className="font-body text-sm font-medium underline decoration-1 underline-offset-[5px] transition hover:no-underline"
+                  type="button"
+                  onClick={resetCanvas}
+                  style={{ color: MUTE }}
+                >
+                  清空
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="lg:col-span-5">
             <div
-              className={`relative grid aspect-[4/3] min-h-[280px] place-items-center overflow-hidden rounded-[18px] border border-dashed bg-white/88 transition ${
-                isDragging ? "border-[#3d383f] bg-[#f0ede7]" : "border-[#d7d0c8]"
-              }`}
+              className={`relative aspect-[4/3] border transition ${isGenerating ? "opacity-70" : ""}`}
+              style={{
+                borderColor: isDragging ? INK : RULE,
+                background: isDragging ? "#f1ede5" : "transparent",
+              }}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div className="relative px-5 text-center">
-                <div className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-xl bg-[#f2efe8] text-[#6f675d] shadow-[0_16px_30px_rgba(37,35,38,0.07)] ring-1 ring-black/[0.04]">
-                  <ImagePlus size={32} strokeWidth={1.7} />
-                </div>
+              <div className="absolute inset-0 grid place-items-center px-8 text-center">
+                {hasPending ? (
+                  <div className="flex flex-col items-center gap-5">
+                    <div
+                      className="h-20 w-20 overflow-hidden border"
+                      style={{ borderColor: RULE }}
+                    >
+                      <img
+                        className="h-full w-full object-cover"
+                        src={pendingPreview}
+                        alt="待生成图片"
+                        draggable={false}
+                      />
+                    </div>
 
-                <button
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#28262a] px-5 py-2 font-body text-sm font-semibold text-white shadow-[0_10px_20px_rgba(37,35,38,0.1)] transition hover:bg-[#171519]"
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                >
-                  <Upload size={16} strokeWidth={2} />
-                  选择一张图片或将其拖到这里
-                </button>
+                    <div className="flex flex-col items-center gap-3">
+                      <button
+                        className="inline-flex items-center gap-2 px-6 py-2.5 font-body text-[12.5px] font-semibold uppercase tracking-[0.18em] text-[#fbfaf7] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        type="button"
+                        onClick={() => void handleGenerate()}
+                        disabled={isGenerating}
+                        style={{ background: ACCENT }}
+                      >
+                        {isGenerating ? "生成中…" : "Generate ↗"}
+                      </button>
 
-                <p className="mt-5 font-body text-xs font-medium text-[#8d8790]">
-                  支持格式: JPG, JPEG, PNG, WEBP, GIF | 最大原图: 12 MB
-                </p>
+                      <button
+                        className="font-body text-xs font-medium underline decoration-1 underline-offset-[4px] transition hover:no-underline disabled:opacity-50"
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        disabled={isGenerating}
+                        style={{ color: MUTE }}
+                      >
+                        换一张
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <HandUploadMark className="mb-5 h-14 w-14 text-[#1a1816]" />
+                    <button
+                      className="font-display text-xl italic underline decoration-1 underline-offset-[6px] transition hover:no-underline"
+                      type="button"
+                      onClick={() => inputRef.current?.click()}
+                      style={{ color: INK }}
+                    >
+                      选一张图，或拖到这里
+                    </button>
+                    <p className="eyebrow mt-5">JPG · PNG · WEBP · ≤ 8 MB</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        </section>
 
-          {error ? (
-            <p className="mt-5 w-full max-w-[1020px] rounded-xl bg-[#fff4ef] px-4 py-3 text-center font-body text-sm font-medium text-[#8d3a24] ring-1 ring-[#efd3c8]">
+        {error ? (
+          <div
+            className="mt-8 border-l-2 py-1.5 pl-4"
+            style={{ borderColor: ACCENT }}
+            role="alert"
+          >
+            <p className="eyebrow" style={{ color: ACCENT }}>
+              错误
+            </p>
+            <p className="mt-1 font-body text-sm" style={{ color: INK }}>
               {error}
             </p>
-          ) : null}
+          </div>
+        ) : null}
 
-          <section className="mt-9 w-full max-w-[1020px]">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-body text-xl font-bold tracking-tight text-[#2b2a31]">
-                试试这些图片
-              </h2>
-            </div>
+        <section className="mt-24">
+          <p className="eyebrow mb-5">试试这些</p>
 
-            <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
-              {SAMPLE_IMAGES.map((image) => (
-                <button
-                  className="group overflow-hidden rounded-lg bg-white shadow-[0_8px_22px_rgba(37,35,38,0.05)] ring-1 ring-black/[0.04] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(37,35,38,0.08)]"
-                  type="button"
-                  key={image.src}
-                  onClick={() => {
-                    setPendingPreview("");
-                    setResultDataUrl(image.afterSrc ?? image.src);
-                    setError("");
-                  }}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {SAMPLE_IMAGES.map((image) => (
+              <button
+                className="group block text-left disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                key={image.src}
+                disabled={isGenerating}
+                onClick={() => {
+                  setPendingPreview("");
+                  setPendingFile(null);
+                  setResultDataUrl(image.afterSrc ?? image.src);
+                  setError("");
+                }}
+              >
+                <div
+                  className="aspect-[4/3] overflow-hidden border bg-white transition group-hover:border-[#1a1816]"
+                  style={{ borderColor: RULE }}
                 >
                   <img
-                    className="aspect-[4/3] h-full w-full select-none object-cover transition duration-300 group-hover:scale-[1.03]"
+                    className="h-full w-full select-none object-cover"
                     src={image.src}
                     alt={image.alt}
                     draggable={false}
                   />
-                </button>
-              ))}
-            </div>
-          </section>
+                </div>
+              </button>
+            ))}
+          </div>
         </section>
 
-        <footer className="mt-3 border-t border-[#e8e2d9] py-5 text-[#6d676f]">
-          <div className="mx-auto flex w-full max-w-[1020px] flex-col items-center gap-3 sm:flex-row sm:justify-between">
-            <p className="font-body text-xs font-medium text-[#8a8580]">未命名计划</p>
-            <nav className="flex items-center gap-1.5" aria-label="社交链接">
+        <footer
+          className="mt-24 border-t pt-5 pb-7"
+          style={{ borderColor: RULE }}
+        >
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+            <p className="eyebrow">未命名计划</p>
+            <nav className="flex items-center gap-5" aria-label="社交链接">
               <a
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#69636b] transition hover:bg-[#f1eee8] hover:text-[#252326]"
+                className="eyebrow underline decoration-1 underline-offset-[5px] transition hover:no-underline"
                 href="https://github.com/unnamedplan/Scribble-Lab"
                 target="_blank"
                 rel="noreferrer"
-                aria-label="GitHub"
-                title="GitHub"
+                style={{ color: INK }}
               >
-                <Github size={17} strokeWidth={1.9} />
+                GITHUB
               </a>
               <a
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#69636b] transition hover:bg-[#f1eee8] hover:text-[#252326]"
+                className="eyebrow underline decoration-1 underline-offset-[5px] transition hover:no-underline"
                 href="https://www.douyin.com/user/MS4wLjABAAAA4xuEteUs7Y4mWH6PVJMJYAw3DDzsPGll6g-X7RCtpHR7OmHdp7Vgra1Meiq1q281?from_tab_name=main"
                 target="_blank"
                 rel="noreferrer"
-                aria-label="抖音"
-                title="抖音"
+                style={{ color: INK }}
               >
-                <Music2 size={17} strokeWidth={1.9} />
+                抖音
               </a>
               <a
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#69636b] transition hover:bg-[#f1eee8] hover:text-[#252326]"
+                className="eyebrow underline decoration-1 underline-offset-[5px] transition hover:no-underline"
                 href="https://x.com/unnamedplan"
                 target="_blank"
                 rel="noreferrer"
-                aria-label="X"
-                title="X"
+                style={{ color: INK }}
               >
-                <Twitter size={17} strokeWidth={1.9} />
+                X
               </a>
             </nav>
           </div>
         </footer>
-      </section>
+      </div>
     </main>
   );
 }

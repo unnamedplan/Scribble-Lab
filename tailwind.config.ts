@@ -9,8 +9,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        display: ["var(--font-display)", "Arial", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
         body: ["var(--font-body)", "Arial", "sans-serif"],
+        handwritten: ["var(--font-handwritten)", "cursive"],
       },
       colors: {
         ink: "#111111",
