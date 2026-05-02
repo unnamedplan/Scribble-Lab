@@ -17,6 +17,9 @@ const MUTE = "#847d75";
 const RULE = "rgba(0,0,0,0.1)";
 const ACCENT = "#7a2e2e";
 
+const DOUYIN_URL =
+  "https://www.douyin.com/user/MS4wLjABAAAA4xuEteUs7Y4mWH6PVJMJYAw3DDzsPGll6g-X7RCtpHR7OmHdp7Vgra1Meiq1q281?from_tab_name=main";
+
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -117,6 +120,13 @@ export function ScribbleStudio() {
         body: formData,
       });
 
+      if (response.status === 413) {
+        setError(
+          "图片太大被反向代理拦了。请换一张更小的图片，或让管理员把 nginx 的 client_max_body_size 调到 16M 以上。",
+        );
+        return;
+      }
+
       const payload = (await response.json().catch(() => null)) as
         | { imageBase64?: string; mimeType?: string; error?: string }
         | null;
@@ -197,6 +207,55 @@ export function ScribbleStudio() {
             乱画实验室
           </span>
         </header>
+
+        <section className="mt-10" aria-label="来自作者">
+          <div className="mx-auto max-w-[640px]">
+            <p
+              className="eyebrow mb-4 text-center"
+              style={{ color: INK }}
+            >
+              来自作者
+            </p>
+            <div
+              className="space-y-3 font-body text-[15px] leading-[1.85]"
+              style={{ color: INK }}
+            >
+              <p>非常感谢你能来使用～。</p>
+              <p>
+                这个网站上的每一张图，都来自 gpt-image-2，每一次生成都对应着一笔真实的算力账单。我没有把它做成付费、也没有挂广告，只是想让它一直开着——给每一个偶然路过的人。
+              </p>
+              <p>
+                我是一名大学生，正在做一个叫
+                <a
+                  className="font-medium underline decoration-1 underline-offset-[4px] transition hover:no-underline"
+                  href={DOUYIN_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: ACCENT }}
+                >
+                  「未命名计划」
+                </a>
+                的账号，记录我和 AI 一起做的事，也分享我自己用过、觉得真正好用的工具。如果你愿意去抖音搜索
+                <a
+                  className="font-medium underline decoration-1 underline-offset-[4px] transition hover:no-underline"
+                  href={DOUYIN_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: ACCENT }}
+                >
+                  「未命名计划」
+                </a>
+                ，关注我，是我能收到的最好的回信。
+              </p>
+            </div>
+            <p
+              className="mt-4 text-right font-display text-sm italic"
+              style={{ color: MUTE }}
+            >
+              —— 未命名计划
+            </p>
+          </div>
+        </section>
 
         <section className="mt-12 grid gap-x-10 gap-y-8 lg:grid-cols-12">
           <div className="lg:col-span-7">
@@ -291,7 +350,7 @@ export function ScribbleStudio() {
                         disabled={isGenerating}
                         style={{ background: ACCENT }}
                       >
-                        {isGenerating ? "生成中…" : "Generate ↗"}
+                        {isGenerating ? "生成中…" : "开始生成 ↗"}
                       </button>
 
                       <button
@@ -390,7 +449,7 @@ export function ScribbleStudio() {
               </a>
               <a
                 className="eyebrow underline decoration-1 underline-offset-[5px] transition hover:no-underline"
-                href="https://www.douyin.com/user/MS4wLjABAAAA4xuEteUs7Y4mWH6PVJMJYAw3DDzsPGll6g-X7RCtpHR7OmHdp7Vgra1Meiq1q281?from_tab_name=main"
+                href={DOUYIN_URL}
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: INK }}
@@ -408,6 +467,12 @@ export function ScribbleStudio() {
               </a>
             </nav>
           </div>
+          <p
+            className="eyebrow mt-4"
+            style={{ color: MUTE }}
+          >
+            特别鸣谢 · 提示词来源 X · @arrakis_ai (CHOI)
+          </p>
         </footer>
       </div>
     </main>

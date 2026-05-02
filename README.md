@@ -55,3 +55,7 @@ pnpm samples:convert
 ```
 
 脚本会把图片转成 WebP 写入 `public/samples/generated/` 并更新 `gallery.ts`。
+
+## 特别鸣谢
+
+提示词来源：[X · @arrakis_ai (CHOI)](https://x.com/arrakis_ai)
