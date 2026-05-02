@@ -9,11 +9,13 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const PROVIDER_TIMEOUT_MS = 80_000;
 const ALLOWED_IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 
-type ImageEditPayload = {
-  data?: Array<{
-    b64_json?: string;
-    url?: string;
-  }>;
+type ResponsesOutputItem = {
+  type?: string;
+  result?: string;
+};
+
+type ResponsesPayload = {
+  output?: ResponsesOutputItem[];
   error?: {
     message?: string;
   };
@@ -31,6 +33,7 @@ function getConfig() {
   return {
     apiKey: process.env.OPENAI_API_KEY,
     baseUrl: process.env.OPENAI_BASE_URL ?? "https://api-xai.ainaibahub.com/v1",
+    mainModel: process.env.OPENAI_MODEL ?? "gpt-5.5",
     imageModel: process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2",
     imageQuality: process.env.OPENAI_IMAGE_QUALITY ?? "medium",
   };
@@ -58,21 +61,16 @@ export async function POST(request: Request) {
     return jsonError("Image is too large. Please keep it under 4MB.");
   }
 
-  const { apiKey, baseUrl, imageModel, imageQuality } = getConfig();
+  const { apiKey, baseUrl, mainModel, imageModel, imageQuality } = getConfig();
 
   if (!apiKey) {
     return jsonError("Missing OPENAI_API_KEY on the server.", 500);
   }
 
-  const endpoint = `${baseUrl.replace(/\/$/, "")}/images/edits`;
-  const providerFormData = new FormData();
-  providerFormData.append("model", imageModel);
-  providerFormData.append("image", image, image.name || "scribble-upload");
-  providerFormData.append("prompt", SCRIBBLE_PROMPT);
-  providerFormData.append("size", "1024x1024");
-  providerFormData.append("quality", imageQuality);
-  providerFormData.append("n", "1");
+  const bytes = Buffer.from(await image.arrayBuffer());
+  const imageDataUrl = `data:${image.type};base64,${bytes.toString("base64")}`;
 
+  const endpoint = `${baseUrl.replace(/\/$/, "")}/responses`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
 
@@ -83,8 +81,35 @@ export async function POST(request: Request) {
       signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      body: providerFormData,
+      body: JSON.stringify({
+        model: mainModel,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: SCRIBBLE_PROMPT,
+              },
+              {
+                type: "input_image",
+                image_url: imageDataUrl,
+              },
+            ],
+          },
+        ],
+        tools: [
+          {
+            type: "image_generation",
+            model: imageModel,
+            size: "1024x1024",
+            quality: imageQuality,
+            output_format: "png",
+          },
+        ],
+      }),
     });
   } catch (error) {
     const message = isAbortError(error)
@@ -96,21 +121,23 @@ export async function POST(request: Request) {
     clearTimeout(timeoutId);
   }
 
-  let payload: ImageEditPayload;
+  let payload: ResponsesPayload;
   try {
-    payload = (await response.json()) as ImageEditPayload;
+    payload = (await response.json()) as ResponsesPayload;
   } catch {
     return jsonError("The image provider returned an unreadable response.", 502);
   }
 
   if (!response.ok) {
     return jsonError(
-      payload.error?.message ?? `Image edit request failed with ${response.status}.`,
+      payload.error?.message ?? `Image provider request failed with ${response.status}.`,
       502,
     );
   }
 
-  const imageBase64 = payload.data?.find((item) => item.b64_json)?.b64_json;
+  const imageBase64 = payload.output?.find(
+    (item) => item.type === "image_generation_call" && item.result,
+  )?.result;
 
   if (!imageBase64) {
     return jsonError("No generated image was returned by the provider.", 502);
