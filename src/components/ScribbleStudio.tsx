@@ -2,11 +2,14 @@
 
 import {
   Download,
+  Github,
   ImagePlus,
   Loader2,
+  Music2,
   Trash2,
+  Twitter,
   Upload,
-  X,
+  X as CloseIcon,
 } from "lucide-react";
 import {
   ChangeEvent,
@@ -360,7 +363,7 @@ export function ScribbleStudio() {
                       title="重置"
                       onClick={resetCanvas}
                     >
-                      <X size={15} strokeWidth={2} />
+                      <CloseIcon size={15} strokeWidth={2} />
                     </button>
                   </div>
                 </>
@@ -511,30 +514,36 @@ export function ScribbleStudio() {
           </section>
         </section>
 
-        <footer className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 py-6 font-body text-sm text-[#7d777f]">
+        <footer className="flex flex-wrap items-center justify-center gap-3 py-6 text-[#6d676f]">
           <a
-            className="transition hover:text-[#252326]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/78 shadow-[0_10px_26px_rgba(37,35,38,0.07)] ring-1 ring-black/[0.05] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#252326] hover:shadow-[0_14px_30px_rgba(37,35,38,0.1)]"
             href="https://github.com/unnamedplan/Scribble-Lab"
             target="_blank"
             rel="noreferrer"
+            aria-label="GitHub"
+            title="GitHub"
           >
-            GitHub
+            <Github size={18} strokeWidth={1.9} />
           </a>
           <a
-            className="transition hover:text-[#252326]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/78 shadow-[0_10px_26px_rgba(37,35,38,0.07)] ring-1 ring-black/[0.05] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#252326] hover:shadow-[0_14px_30px_rgba(37,35,38,0.1)]"
             href="https://www.douyin.com/user/MS4wLjABAAAA4xuEteUs7Y4mWH6PVJMJYAw3DDzsPGll6g-X7RCtpHR7OmHdp7Vgra1Meiq1q281?from_tab_name=main"
             target="_blank"
             rel="noreferrer"
+            aria-label="抖音"
+            title="抖音"
           >
-            抖音
+            <Music2 size={18} strokeWidth={1.9} />
           </a>
           <a
-            className="transition hover:text-[#252326]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/78 shadow-[0_10px_26px_rgba(37,35,38,0.07)] ring-1 ring-black/[0.05] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#252326] hover:shadow-[0_14px_30px_rgba(37,35,38,0.1)]"
             href="https://x.com/unnamedplan"
             target="_blank"
             rel="noreferrer"
+            aria-label="X"
+            title="X"
           >
-            X
+            <Twitter size={18} strokeWidth={1.9} />
           </a>
         </footer>
       </section>
