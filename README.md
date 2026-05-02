@@ -1,6 +1,6 @@
 # Scribble-Lab
 
-Scribble-Lab 是一个 Next.js 图片生成小工具：用户上传一张照片，服务端通过 OpenAI Responses API 兼容接口调用图像生成模型，把照片转换成随手涂鸦风格。
+Scribble-Lab 是一个纯前端 Next.js UI 原型。页面保留上传、预览、示例图和下载交互，不包含服务端生成接口，也不调用任何 AI API。
 
 ## 本地开发
 
@@ -24,37 +24,9 @@ pnpm typecheck
 pnpm build
 ```
 
-## 环境变量
+## 部署
 
-在项目根目录创建 `.env.local`：
-
-```bash
-OPENAI_API_KEY=your_real_key_here
-OPENAI_BASE_URL=https://api-xai.ainaibahub.com/v1
-OPENAI_MODEL=gpt-5.5
-OPENAI_IMAGE_MODEL=gpt-image-2
-```
-
-不要把 API Key 写进客户端代码，也不要使用 `NEXT_PUBLIC_*` 暴露密钥。
-
-## 部署到 Vercel
-
-在 Vercel 项目的 Environment Variables 中配置同样的变量：
-
-```bash
-OPENAI_API_KEY
-OPENAI_BASE_URL
-OPENAI_MODEL
-OPENAI_IMAGE_MODEL
-```
-
-当前上传限制设置为 4 MB，适配 Vercel Function 的 4.5 MB 请求体限制。生成请求路径是：
-
-```text
-用户浏览器 -> Vercel /api/generate -> OPENAI_BASE_URL 中转接口 -> Vercel -> 用户浏览器
-```
-
-API Key 只在服务端使用，不会发送到用户浏览器。
+项目现在没有后端代码和环境变量要求，可以按普通静态/前端 Next.js 项目部署。上传图片只会在浏览器本地预览，不会发送到服务器。
 
 ## 首页素材
 

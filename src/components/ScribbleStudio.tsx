@@ -4,9 +4,7 @@ import {
   Download,
   Github,
   ImagePlus,
-  Loader2,
   Music2,
-  Trash2,
   Twitter,
   Upload,
   X as CloseIcon,
@@ -14,118 +12,14 @@ import {
 import {
   ChangeEvent,
   DragEvent,
-  useEffect,
   useRef,
   useState,
 } from "react";
 import Link from "next/link";
 import { DEFAULT_AFTER_IMAGE, SAMPLE_IMAGES } from "@/lib/gallery";
 
-type GenerateResponse = {
-  imageBase64?: string;
-  mimeType?: string;
-  createdAt?: string;
-  error?: string;
-};
-
-type HistoryItem = {
-  id: string;
-  sourceDataUrl: string;
-  resultDataUrl: string;
-  createdAt: string;
-};
-
-const DB_NAME = "scribble-studio";
-const DB_VERSION = 1;
-const STORE_NAME = "history";
-const MAX_HISTORY_ITEMS = 8;
 const MAX_SOURCE_FILE_SIZE = 12 * 1024 * 1024;
-const MAX_GENERATION_FILE_SIZE = 4 * 1024 * 1024;
-const JPEG_COMPRESSION_STEPS = [0.92, 0.86, 0.8, 0.72, 0.64, 0.56];
 const ALLOWED_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
-
-function openHistoryDb() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function getHistoryItems() {
-  const db = await openHistoryDb();
-
-  return new Promise<HistoryItem[]>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const request = tx.objectStore(STORE_NAME).getAll();
-
-    request.onsuccess = () => {
-      const items = (request.result as HistoryItem[]).sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      resolve(items);
-    };
-    request.onerror = () => reject(request.error);
-    tx.oncomplete = () => db.close();
-  });
-}
-
-async function saveHistoryItem(item: HistoryItem) {
-  const db = await openHistoryDb();
-
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(item);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => reject(tx.error);
-  });
-
-  const items = await getHistoryItems();
-  const overflow = items.slice(MAX_HISTORY_ITEMS);
-
-  if (overflow.length) {
-    await Promise.all(overflow.map((historyItem) => deleteHistoryItem(historyItem.id)));
-  }
-}
-
-async function deleteHistoryItem(id: string) {
-  const db = await openHistoryDb();
-
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(id);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function clearHistoryItems() {
-  const db = await openHistoryDb();
-
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).clear();
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => reject(tx.error);
-  });
-}
 
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -136,122 +30,12 @@ function fileToDataUrl(file: File) {
   });
 }
 
-function imageElementFromDataUrl(dataUrl: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Unable to read image."));
-    image.src = dataUrl;
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        reject(new Error("Unable to prepare image."));
-      },
-      type,
-      quality,
-    );
-  });
-}
-
-async function prepareImageForGeneration(file: File) {
-  const sourceDataUrl = await fileToDataUrl(file);
-
-  if (file.size <= MAX_GENERATION_FILE_SIZE) {
-    return {
-      file,
-      previewDataUrl: sourceDataUrl,
-    };
-  }
-
-  if (file.type === "image/gif") {
-    return {
-      file,
-      previewDataUrl: sourceDataUrl,
-    };
-  }
-
-  const image = await imageElementFromDataUrl(sourceDataUrl);
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return {
-      file,
-      previewDataUrl: sourceDataUrl,
-    };
-  }
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0);
-
-  for (const quality of JPEG_COMPRESSION_STEPS) {
-    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
-
-    if (blob.size > MAX_GENERATION_FILE_SIZE) {
-      continue;
-    }
-
-    const preparedFile = new File(
-      [blob],
-      `${file.name.replace(/\.[^.]+$/, "") || "scribble-upload"}.jpg`,
-      { type: "image/jpeg" },
-    );
-
-    return {
-      file: preparedFile,
-      previewDataUrl: await fileToDataUrl(preparedFile),
-    };
-  }
-
-  return {
-    file,
-    previewDataUrl: sourceDataUrl,
-  };
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 export function ScribbleStudio() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const generationRunRef = useRef(0);
   const [pendingPreview, setPendingPreview] = useState("");
   const [resultDataUrl, setResultDataUrl] = useState("");
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    getHistoryItems()
-      .then(setHistory)
-      .catch(() => setHistory([]));
-  }, []);
-
-  async function loadHistory() {
-    try {
-      setHistory(await getHistoryItems());
-    } catch {
-      setError("读取本地历史失败，可以继续生成新图片。");
-    }
-  }
 
   async function handleFile(file: File) {
     setError("");
@@ -267,16 +51,9 @@ export function ScribbleStudio() {
     }
 
     try {
-      const prepared = await prepareImageForGeneration(file);
-      if (prepared.file.size > MAX_GENERATION_FILE_SIZE) {
-        setError("图片压缩后仍然太大，请换一张更小的图片。");
-        return;
-      }
-
-      const preview = prepared.previewDataUrl;
+      const preview = await fileToDataUrl(file);
       setPendingPreview(preview);
-      setResultDataUrl("");
-      void generateImage(prepared.file, preview);
+      setResultDataUrl(preview);
     } catch {
       setError("读取图片失败，请换一张图片试试。");
     }
@@ -305,59 +82,6 @@ export function ScribbleStudio() {
     if (file) void handleFile(file);
   }
 
-  async function generateImage(file: File, sourceDataUrl: string) {
-    const runId = generationRunRef.current + 1;
-    generationRunRef.current = runId;
-    setIsGenerating(true);
-    setError("");
-
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        body: formData,
-      });
-      const contentType = response.headers.get("content-type") ?? "";
-      let payload: GenerateResponse;
-      try {
-        payload = contentType.includes("application/json")
-          ? ((await response.json()) as GenerateResponse)
-          : { error: "生成服务暂时没有返回可读取的结果，请稍后再试。" };
-      } catch {
-        payload = { error: "生成服务暂时没有返回可读取的结果，请稍后再试。" };
-      }
-
-      if (!response.ok || !payload.imageBase64) {
-        throw new Error(payload.error ?? "生成失败，请稍后再试。");
-      }
-
-      const mimeType = payload.mimeType ?? "image/png";
-      const generatedDataUrl = `data:${mimeType};base64,${payload.imageBase64}`;
-      const createdAt = payload.createdAt ?? new Date().toISOString();
-      const item: HistoryItem = {
-        id: crypto.randomUUID(),
-        sourceDataUrl,
-        resultDataUrl: generatedDataUrl,
-        createdAt,
-      };
-
-      if (generationRunRef.current !== runId) return;
-
-      setResultDataUrl(generatedDataUrl);
-      await saveHistoryItem(item);
-      await loadHistory();
-    } catch (caughtError) {
-      if (generationRunRef.current !== runId) return;
-      setError(caughtError instanceof Error ? caughtError.message : "生成失败，请稍后再试。");
-    } finally {
-      if (generationRunRef.current === runId) {
-        setIsGenerating(false);
-      }
-    }
-  }
-
   async function downloadResult() {
     if (!resultDataUrl) return;
 
@@ -373,27 +97,7 @@ export function ScribbleStudio() {
     URL.revokeObjectURL(objectUrl);
   }
 
-  function restoreHistory(item: HistoryItem) {
-    generationRunRef.current += 1;
-    setIsGenerating(false);
-    setPendingPreview(item.sourceDataUrl);
-    setResultDataUrl(item.resultDataUrl);
-    setError("");
-  }
-
-  async function removeHistory(id: string) {
-    await deleteHistoryItem(id);
-    await loadHistory();
-  }
-
-  async function clearHistory() {
-    await clearHistoryItems();
-    setHistory([]);
-  }
-
   function resetCanvas() {
-    generationRunRef.current += 1;
-    setIsGenerating(false);
     setPendingPreview("");
     setResultDataUrl("");
     setError("");
@@ -471,31 +175,12 @@ export function ScribbleStudio() {
                 </>
               ) : (
                 <div className="relative grid h-full w-full place-items-center bg-[#fbfaf7]">
-                  {isGenerating && pendingPreview ? (
-                    <>
-                      <img
-                        className="absolute inset-0 h-full w-full scale-[1.04] select-none object-cover opacity-75 blur-xl [animation:image-breathe_2.8s_ease-in-out_infinite]"
-                        src={pendingPreview}
-                        alt="Uploaded image while generating"
-                        draggable={false}
-                      />
-                      <div className="absolute inset-0 bg-[#fbfaf7]/22" />
-                      <div className="relative grid place-items-center rounded-xl bg-white/80 px-7 py-6 text-center shadow-[0_18px_42px_rgba(37,35,38,0.11)] ring-1 ring-black/[0.04] backdrop-blur-xl [animation:panel-breathe_2.4s_ease-in-out_infinite]">
-                        <span className="mb-4 h-10 w-10 rounded-full border border-[#d8d0c7] border-t-[#3d383f] [animation:spin_900ms_linear_infinite]" />
-                        <p className="font-body text-sm font-medium text-[#5f5962]">正在画图</p>
-                        <p className="mt-2 font-body text-xs text-[#918a84]">
-                          保持页面打开，结果马上出现
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <img
-                      className="absolute inset-0 h-full w-full select-none object-cover opacity-100"
-                      src={DEFAULT_AFTER_IMAGE}
-                      alt="Default generated preview"
-                      draggable={false}
-                    />
-                  )}
+                  <img
+                    className="absolute inset-0 h-full w-full select-none object-cover opacity-100"
+                    src={pendingPreview || DEFAULT_AFTER_IMAGE}
+                    alt="Preview"
+                    draggable={false}
+                  />
                 </div>
               )}
             </div>
@@ -510,11 +195,7 @@ export function ScribbleStudio() {
             >
               <div className="relative px-5 text-center">
                 <div className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-xl bg-[#f2efe8] text-[#6f675d] shadow-[0_16px_30px_rgba(37,35,38,0.07)] ring-1 ring-black/[0.04]">
-                  {isGenerating ? (
-                    <Loader2 className="animate-spin" size={31} strokeWidth={1.8} />
-                  ) : (
-                    <ImagePlus size={32} strokeWidth={1.7} />
-                  )}
+                  <ImagePlus size={32} strokeWidth={1.7} />
                 </div>
 
                 <button
@@ -544,15 +225,6 @@ export function ScribbleStudio() {
               <h2 className="font-body text-xl font-bold tracking-tight text-[#2b2a31]">
                 试试这些图片
               </h2>
-              <button
-                className="inline-flex h-8 items-center justify-center gap-2 rounded-lg px-3 font-body text-xs font-medium text-[#8e8990] transition hover:bg-white hover:text-[#2b2a31] disabled:cursor-not-allowed disabled:opacity-35"
-                type="button"
-                disabled={!history.length}
-                onClick={clearHistory}
-              >
-                <Trash2 size={14} strokeWidth={2} />
-                清空历史
-              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
@@ -562,11 +234,9 @@ export function ScribbleStudio() {
                   type="button"
                   key={image.src}
                   onClick={() => {
-                    generationRunRef.current += 1;
-                    setIsGenerating(false);
                     setPendingPreview("");
                     setResultDataUrl(image.afterSrc ?? image.src);
-                    setError("示例图片用于预览排版。请上传本地图片后再生成。");
+                    setError("");
                   }}
                 >
                   <img
@@ -578,41 +248,6 @@ export function ScribbleStudio() {
                 </button>
               ))}
             </div>
-
-            {history.length ? (
-              <div className="mt-4 flex gap-2.5 overflow-x-auto pb-2">
-                {history.map((item) => (
-                  <div className="group relative shrink-0" key={item.id}>
-                    <button
-                      className="grid h-20 w-32 grid-cols-2 overflow-hidden rounded-lg bg-white shadow-[0_8px_22px_rgba(37,35,38,0.06)] ring-1 ring-black/[0.04] transition hover:ring-[#575057]/25"
-                      type="button"
-                      onClick={() => restoreHistory(item)}
-                    >
-                      <img
-                        className="h-full w-full select-none border-r border-black/10 object-cover"
-                        src={item.sourceDataUrl}
-                        alt="History source"
-                        draggable={false}
-                      />
-                      <img
-                        className="h-full w-full select-none object-cover"
-                        src={item.resultDataUrl}
-                        alt="History result"
-                        draggable={false}
-                      />
-                    </button>
-                    <button
-                      className="absolute right-1.5 top-1.5 hidden h-7 w-7 items-center justify-center rounded-md bg-white/90 text-[#6e6e73] shadow-sm backdrop-blur-md transition hover:text-[#9b3d26] group-hover:inline-flex"
-                      type="button"
-                      title={`删除 ${formatDate(item.createdAt)}`}
-                      onClick={() => removeHistory(item.id)}
-                    >
-                      <Trash2 size={13} strokeWidth={1.8} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
           </section>
         </section>
 
