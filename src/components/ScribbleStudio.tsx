@@ -41,9 +41,8 @@ const STORE_NAME = "history";
 const MAX_HISTORY_ITEMS = 8;
 const MAX_SOURCE_FILE_SIZE = 12 * 1024 * 1024;
 const MAX_GENERATION_FILE_SIZE = 4 * 1024 * 1024;
-const MAX_GENERATION_IMAGE_SIDE = 1280;
-const GENERATION_JPEG_QUALITY = 0.84;
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const JPEG_COMPRESSION_STEPS = [0.92, 0.86, 0.8, 0.72, 0.64, 0.56];
+const ALLOWED_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 
 function openHistoryDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -164,22 +163,25 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
 
 async function prepareImageForGeneration(file: File) {
   const sourceDataUrl = await fileToDataUrl(file);
-  const image = await imageElementFromDataUrl(sourceDataUrl);
-  const largestSide = Math.max(image.naturalWidth, image.naturalHeight);
 
-  if (largestSide <= MAX_GENERATION_IMAGE_SIDE && file.type === "image/jpeg") {
+  if (file.size <= MAX_GENERATION_FILE_SIZE) {
     return {
       file,
       previewDataUrl: sourceDataUrl,
     };
   }
 
-  const scale = Math.min(1, MAX_GENERATION_IMAGE_SIDE / largestSide);
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  if (file.type === "image/gif") {
+    return {
+      file,
+      previewDataUrl: sourceDataUrl,
+    };
+  }
+
+  const image = await imageElementFromDataUrl(sourceDataUrl);
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -190,21 +192,31 @@ async function prepareImageForGeneration(file: File) {
   }
 
   context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-  context.drawImage(image, 0, 0, width, height);
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0);
 
-  const blob = await canvasToBlob(canvas, "image/jpeg", GENERATION_JPEG_QUALITY);
-  const preparedFile = new File(
-    [blob],
-    `${file.name.replace(/\.[^.]+$/, "") || "scribble-upload"}.jpg`,
-    { type: "image/jpeg" },
-  );
-  const shouldUseOriginal =
-    file.size <= MAX_GENERATION_FILE_SIZE && preparedFile.size >= file.size;
+  for (const quality of JPEG_COMPRESSION_STEPS) {
+    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+
+    if (blob.size > MAX_GENERATION_FILE_SIZE) {
+      continue;
+    }
+
+    const preparedFile = new File(
+      [blob],
+      `${file.name.replace(/\.[^.]+$/, "") || "scribble-upload"}.jpg`,
+      { type: "image/jpeg" },
+    );
+
+    return {
+      file: preparedFile,
+      previewDataUrl: await fileToDataUrl(preparedFile),
+    };
+  }
 
   return {
-    file: shouldUseOriginal ? file : preparedFile,
-    previewDataUrl: shouldUseOriginal ? sourceDataUrl : await fileToDataUrl(preparedFile),
+    file,
+    previewDataUrl: sourceDataUrl,
   };
 }
 
@@ -245,7 +257,7 @@ export function ScribbleStudio() {
     setError("");
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      setError("只支持 JPG、PNG、WebP 图片。");
+      setError("只支持 JPG、PNG、WebP、非动图 GIF 图片。");
       return;
     }
 
@@ -393,7 +405,7 @@ export function ScribbleStudio() {
         ref={inputRef}
         className="sr-only"
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept="image/png,image/jpeg,image/webp,image/gif"
         onChange={handleInputChange}
       />
 
@@ -515,7 +527,7 @@ export function ScribbleStudio() {
                 </button>
 
                 <p className="mt-5 font-body text-xs font-medium text-[#8d8790]">
-                  支持格式: JPG, JPEG, PNG, WEBP | 最大原图: 12 MB
+                  支持格式: JPG, JPEG, PNG, WEBP, GIF | 最大原图: 12 MB
                 </p>
               </div>
             </div>

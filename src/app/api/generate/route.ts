@@ -6,8 +6,8 @@ export const maxDuration = 90;
 export const preferredRegion = "sin1";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const PROVIDER_TIMEOUT_MS = 22_000;
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const PROVIDER_TIMEOUT_MS = 80_000;
+const ALLOWED_IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 
 type ResponsesOutputItem = {
   type?: string;
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   }
 
   if (!ALLOWED_IMAGE_TYPES.has(image.type)) {
-    return jsonError("Only JPG, PNG, and WebP images are supported.");
+    return jsonError("Only JPG, PNG, WebP, and non-animated GIF images are supported.");
   }
 
   if (image.size > MAX_IMAGE_BYTES) {
